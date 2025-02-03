@@ -1,3 +1,159 @@
+1. Customer APIs
+✅ Create Customer
+
+POST /customers
+Body (JSON Example):
+json
+Copy
+Edit
+{
+  "name": "John Doe",
+  "email": "johndoe@example.com",
+  "phone": "1234567890",
+  "address": "123 Main Street"
+}
+Expected Response: 201 Created with customer details.
+✅ Get All Customers
+
+GET /customers
+Expected Response: 200 OK with a list of customers.
+✅ Get Customer by ID
+
+GET /customers/{customerId}
+Expected Response: 200 OK with customer details.
+✅ Update Customer
+
+PUT /customers/{customerId}
+Body (JSON Example):
+json
+Copy
+Edit
+{
+  "name": "John Smith",
+  "email": "johnsmith@example.com",
+  "phone": "9876543210",
+  "address": "456 Another St"
+}
+Expected Response: 200 OK with updated customer details.
+✅ Delete Customer
+
+DELETE /customers/{customerId}
+Expected Response: 204 No Content
+2. Supplier APIs
+✅ Create Supplier
+
+POST /suppliers
+Body (JSON Example):
+json
+Copy
+Edit
+{
+  "name": "Supplier One",
+  "contact": "supplier@example.com",
+  "address": "789 Supplier Road"
+}
+Expected Response: 201 Created
+✅ Get All Suppliers
+
+GET /suppliers
+Expected Response: 200 OK with a list of suppliers.
+✅ Get Supplier by ID
+
+GET /suppliers/{supplierId}
+Expected Response: 200 OK with supplier details.
+✅ Update Supplier
+
+PUT /suppliers/{supplierId}
+Expected Response: 200 OK
+✅ Delete Supplier
+
+DELETE /suppliers/{supplierId}
+Expected Response: 204 No Content
+3. Item APIs
+✅ Create Item
+
+POST /items
+Body (JSON Example):
+json
+Copy
+Edit
+{
+  "name": "Laptop",
+  "price": 1200.50,
+  "stock": 10
+}
+Expected Response: 201 Created
+✅ Get All Items
+
+GET /items
+Expected Response: 200 OK with item list.
+✅ Get Item by ID
+
+GET /items/{itemId}
+Expected Response: 200 OK
+✅ Update Item
+
+PUT /items/{itemId}
+Expected Response: 200 OK
+✅ Delete Item
+
+DELETE /items/{itemId}
+Expected Response: 204 No Content
+4. Order APIs
+✅ Create Order
+
+POST /orders
+Body (JSON Example):
+json
+Copy
+Edit
+{
+  "customerId": 1,
+  "items": [
+    {
+      "itemId": 1,
+      "quantity": 2
+    }
+  ]
+}
+Expected Response: 201 Created
+✅ Get All Orders
+
+GET /orders
+Expected Response: 200 OK
+✅ Get Order by ID
+
+GET /orders/{orderId}
+Expected Response: 200 OK
+✅ Update Order
+
+PUT /orders/{orderId}
+Expected Response: 200 OK
+✅ Cancel Order
+
+DELETE /orders/{orderId}
+Expected Response: 204 No Content
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 -- .NET Core Identity Tables
 CREATE TABLE AspNetUsers (
     Id NVARCHAR(450) PRIMARY KEY,

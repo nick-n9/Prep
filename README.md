@@ -1,3 +1,306 @@
+public class Position
+{
+    public int PositionID { get; set; }
+    public string JobTitle { get; set; }
+    public string JobDescription { get; set; }
+    public string MinRequiredSkills { get; set; }
+    public string PreferredSkills { get; set; }
+    public string Status { get; set; }
+    public string ReasonForClosure { get; set; }
+    public DateTime? PositionClosedDate { get; set; }
+    public int? LinkedCandidateID { get; set; }
+    public DateTime CreatedDate { get; set; }
+    public DateTime? ModifiedDate { get; set; }
+
+    // Navigation property
+    public Candidate LinkedCandidate { get; set; }
+    public ICollection<PositionSkill> PositionSkills { get; set; }
+    public ICollection<CandidateReview> CandidateReviews { get; set; }
+    public ICollection<Interview> Interviews { get; set; }
+    public ICollection<FinalSelection> FinalSelections { get; set; }
+}
+
+public class Skill
+{
+    public int SkillID { get; set; }
+    public string SkillName { get; set; }
+
+    // Navigation property
+    public ICollection<PositionSkill> PositionSkills { get; set; }
+    public ICollection<CandidateSkill> CandidateSkills { get; set; }
+}
+
+public class PositionSkill
+{
+    public int PositionSkillID { get; set; }
+    public int PositionID { get; set; }
+    public int SkillID { get; set; }
+
+    // Navigation properties
+    public Position Position { get; set; }
+    public Skill Skill { get; set; }
+}
+
+public class Candidate
+{
+    public int CandidateID { get; set; }
+    public string FullName { get; set; }
+    public string Email { get; set; }
+    public string PhoneNumber { get; set; }
+    public string ResumePath { get; set; }
+    public string ProfileStatus { get; set; }
+    public DateTime CreatedDate { get; set; }
+    public DateTime? ModifiedDate { get; set; }
+
+    // Navigation properties
+    public ICollection<CandidateSkill> CandidateSkills { get; set; }
+    public ICollection<CandidateDocument> CandidateDocuments { get; set; }
+    public ICollection<CandidateReview> CandidateReviews { get; set; }
+    public ICollection<Interview> Interviews { get; set; }
+    public ICollection<FinalSelection> FinalSelections { get; set; }
+    public ICollection<CandidateStatusHistory> CandidateStatusHistories { get; set; }
+    public ICollection<DocumentVerification> DocumentVerifications { get; set; }
+}
+
+public class CandidateSkill
+{
+    public int CandidateSkillID { get; set; }
+    public int CandidateID { get; set; }
+    public int SkillID { get; set; }
+    public int YearsOfExperience { get; set; }
+
+    // Navigation properties
+    public Candidate Candidate { get; set; }
+    public Skill Skill { get; set; }
+}
+
+public class CandidateDocument
+{
+    public int DocumentID { get; set; }
+    public int CandidateID { get; set; }
+    public string DocumentType { get; set; }
+    public string DocumentPath { get; set; }
+    public string VerificationStatus { get; set; }
+    public DateTime CreatedDate { get; set; }
+
+    // Navigation property
+    public Candidate Candidate { get; set; }
+}
+
+public class CandidateReview
+{
+    public int ReviewID { get; set; }
+    public int CandidateID { get; set; }
+    public int PositionID { get; set; }
+    public string ReviewerID { get; set; }  // IdentityUser ID (string)
+    public DateTime ReviewDate { get; set; }
+    public string Comments { get; set; }
+    public string Status { get; set; }
+
+    // Navigation properties
+    public Candidate Candidate { get; set; }
+    public Position Position { get; set; }
+    public IdentityUser Reviewer { get; set; }  // Navigation to AspNetUser
+}
+
+public class Interview
+{
+    public int InterviewID { get; set; }
+    public int CandidateID { get; set; }
+    public int PositionID { get; set; }
+    public string InterviewType { get; set; }
+    public DateTime InterviewDate { get; set; }
+    public string InterviewerID { get; set; }  // IdentityUser ID (string)
+    public string Status { get; set; }
+    public string Feedback { get; set; }
+
+    // Navigation properties
+    public Candidate Candidate { get; set; }
+    public Position Position { get; set; }
+    public IdentityUser Interviewer { get; set; }  // Navigation to AspNetUser
+}
+
+public class InterviewRound
+{
+    public int InterviewRoundID { get; set; }
+    public int InterviewID { get; set; }
+    public int RoundNumber { get; set; }
+    public string RoundType { get; set; }
+    public string Feedback { get; set; }
+    public int Rating { get; set; }
+
+    // Navigation properties
+    public Interview Interview { get; set; }
+}
+
+public class InterviewFeedback
+{
+    public int FeedbackID { get; set; }
+    public int InterviewRoundID { get; set; }
+    public string InterviewerID { get; set; }  // IdentityUser ID (string)
+    public string FeedbackText { get; set; }
+    public int Rating { get; set; }
+    public DateTime CreatedDate { get; set; }
+
+    // Navigation properties
+    public InterviewRound InterviewRound { get; set; }
+    public IdentityUser Interviewer { get; set; }  // Navigation to AspNetUser
+}
+
+public class DocumentVerification
+{
+    public int VerificationID { get; set; }
+    public int CandidateID { get; set; }
+    public string VerificationStatus { get; set; }
+    public DateTime VerificationDate { get; set; }
+    public string VerifiedBy { get; set; }  // IdentityUser ID (string)
+
+    // Navigation properties
+    public Candidate Candidate { get; set; }
+    public IdentityUser VerifiedByUser { get; set; }  // Navigation to AspNetUser
+}
+
+public class FinalSelection
+{
+    public int SelectionID { get; set; }
+    public int CandidateID { get; set; }
+    public int PositionID { get; set; }
+    public string OfferLetterPath { get; set; }
+    public DateTime JoiningDate { get; set; }
+    public string Status { get; set; }
+
+    // Navigation properties
+    public Candidate Candidate { get; set; }
+    public Position Position { get; set; }
+}
+
+public class CandidateStatusHistory
+{
+    public int StatusHistoryID { get; set; }
+    public int CandidateID { get; set; }
+    public string Status { get; set; }
+    public string StatusReason { get; set; }
+    public string ChangedBy { get; set; }  // IdentityUser ID (string)
+    public DateTime ChangedDate { get; set; }
+
+    // Navigation properties
+    public Candidate Candidate { get; set; }
+    public IdentityUser ChangedByUser { get; set; }  // Navigation to AspNetUser
+}
+
+public class Notification
+{
+    public int NotificationID { get; set; }
+    public string UserID { get; set; }  // IdentityUser ID (string)
+    public string Message { get; set; }
+    public bool IsRead { get; set; }
+    public DateTime CreatedDate { get; set; }
+
+    // Navigation property
+    public IdentityUser User { get; set; }  // Navigation to AspNetUser
+}
+--------------------------------------------------------------
+
+--------------------------------------------------------------
+
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using YourNamespace.Models;
+
+public class ApplicationDbContext : IdentityDbContext<IdentityUser>
+{
+    public DbSet<Position> Positions { get; set; }
+    public DbSet<Skill> Skills { get; set; }
+    public DbSet<PositionSkill> PositionSkills { get; set; }
+    public DbSet<Candidate> Candidates { get; set; }
+    public DbSet<CandidateSkill> CandidateSkills { get; set; }
+    public DbSet<CandidateDocument> CandidateDocuments { get; set; }
+    public DbSet<CandidateReview> CandidateReviews { get; set; }
+    public DbSet<Interview> Interviews { get; set; }
+    public DbSet<InterviewRound> InterviewRounds { get; set; }
+    public DbSet<InterviewFeedback> InterviewFeedbacks { get; set; }
+    public DbSet<DocumentVerification> DocumentVerifications { get; set; }
+    public DbSet<FinalSelection> FinalSelections { get; set; }
+    public DbSet<CandidateStatusHistory> CandidateStatusHistories { get; set; }
+    public DbSet<Notification> Notifications { get; set; }
+
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+        : base(options)
+    {
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Defining relationships explicitly for Identity references (IdentityUser)
+        modelBuilder.Entity<CandidateReview>()
+            .HasOne(cr => cr.Reviewer)
+            .WithMany()
+            .HasForeignKey(cr => cr.ReviewerID);
+
+        modelBuilder.Entity<Interview>()
+            .HasOne(i => i.Interviewer)
+            .WithMany()
+            .HasForeignKey(i => i.InterviewerID);
+
+        modelBuilder.Entity<InterviewFeedback>()
+            .HasOne(ifb => ifb.Interviewer)
+            .WithMany()
+            .HasForeignKey(ifb => ifb.InterviewerID);
+
+        modelBuilder.Entity<DocumentVerification>()
+            .HasOne(dv => dv.VerifiedByUser)
+            .WithMany()
+            .HasForeignKey(dv => dv.VerifiedBy);
+
+        modelBuilder.Entity<CandidateStatusHistory>()
+            .HasOne(csh => csh.ChangedByUser)
+            .WithMany()
+            .HasForeignKey(csh => csh.ChangedBy);
+
+        modelBuilder.Entity<Notification>()
+            .HasOne(n => n.User)
+            .WithMany()
+            .HasForeignKey(n => n.UserID);
+
+        // Ensure the AspNetUser ID for Identity is treated as a string
+        modelBuilder.Entity<IdentityUser>().Property(u => u.Id).HasColumnType("nvarchar(450)");
+    }
+}
+---------------------------------------------------------------------
+--------------------------------------------------------------------
+---------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 {
   "orderDate": "2025-02-03T10:00:00",
   "deliveryDate": "2025-02-10T10:00:00",

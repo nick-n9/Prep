@@ -1,0 +1,117 @@
+public class Candidate
+{
+    public int CandidateID { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string PhoneNumber { get; set; } = string.Empty;
+    public string ResumeUrl { get; set; } = string.Empty;
+    public string CollegeName { get; set; } = string.Empty; // New Field
+}
+
+
+public class Interview
+{
+    public int InterviewID { get; set; }
+    public int CandidateID { get; set; }
+    public int PositionID { get; set; }
+    public string InterviewType { get; set; } = string.Empty;
+    public DateTime InterviewDate { get; set; }
+    public string Status { get; set; } = "Scheduled";
+
+    public Candidate Candidate { get; set; }
+    public Position Position { get; set; }
+    public List<InterviewRound> InterviewRounds { get; set; } = new();
+}
+
+
+
+public class InterviewRound
+{
+    public int InterviewRoundID { get; set; }
+    public int InterviewID { get; set; }
+    public int RoundNumber { get; set; }
+    public string RoundType { get; set; } = string.Empty;
+    public string Status { get; set; } = "Pending";
+    public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+
+    public Interview Interview { get; set; }
+    public List<InterviewRoundInterviewer> InterviewRoundInterviewers { get; set; } = new();
+}
+
+public class InterviewRoundInterviewer
+{
+    public int RoundInterviewerID { get; set; }
+    public int InterviewRoundID { get; set; }
+    public int InterviewerID { get; set; }
+    public string? Feedback { get; set; }
+    public int? Rating { get; set; }
+
+    public InterviewRound InterviewRound { get; set; }
+    public Interviewer Interviewer { get; set; }
+}
+
+public class Interviewer
+{
+    public int InterviewerID { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string PhoneNumber { get; set; } = string.Empty;
+    public string Designation { get; set; } = string.Empty;
+    public int? ExperienceYears { get; set; }
+    public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+    public DateTime? ModifiedDate { get; set; }
+
+    public List<InterviewerSkill> InterviewerSkills { get; set; } = new();
+}
+
+public class InterviewerSkill
+{
+    public int InterviewerSkillID { get; set; }
+    public int InterviewerID { get; set; }
+    public int SkillID { get; set; }
+    public int? YearsOfExperience { get; set; }
+
+    public Interviewer Interviewer { get; set; }
+    public Skill Skill { get; set; }
+}
+
+public class Event
+{
+    public int EventID { get; set; }
+    public string EventName { get; set; } = string.Empty;
+    public string EventType { get; set; } = string.Empty; // Walk-in, Campus, Referral, etc.
+    public DateTime EventDate { get; set; }
+    public string Location { get; set; } = string.Empty;
+    public int EventOrganizerID { get; set; } // Recruiter or HR
+    public int TotalParticipants { get; set; } // Changed from MaxParticipants
+    public string EventStatus { get; set; } = "Scheduled";
+    public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+    public DateTime? ModifiedDate { get; set; }
+
+    public User EventOrganizer { get; set; }
+    public List<EventCandidate> EventCandidates { get; set; } = new();
+    public List<EventInterviewer> EventInterviewers { get; set; } = new();
+}
+
+public class EventCandidate
+{
+    public int EventCandidateID { get; set; }
+    public int EventID { get; set; }
+    public int CandidateID { get; set; }
+    public DateTime RegistrationDate { get; set; } = DateTime.UtcNow;
+    public string AttendanceStatus { get; set; } = "Pending";
+
+    public Event Event { get; set; }
+    public Candidate Candidate { get; set; }
+}
+
+public class EventInterviewer
+{
+    public int EventInterviewerID { get; set; }
+    public int EventID { get; set; }
+    public int InterviewerID { get; set; }
+    public DateTime AssignedDate { get; set; } = DateTime.UtcNow;
+
+    public Event Event { get; set; }
+    public Interviewer Interviewer { get; set; }
+}

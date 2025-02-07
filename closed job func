@@ -1,0 +1,163 @@
+1. Updating the Service Layer for Closing a Position
+Modify IPositionService.cs
+Add a method to handle closing a position.
+
+csharp
+Copy
+Edit
+public interface IPositionService
+{
+    void ClosePosition(int positionId, string reasonForClosure, int? linkedCandidateId);
+}
+Modify PositionService.cs
+Implement the closing functionality.
+
+csharp
+Copy
+Edit
+public void ClosePosition(int positionId, string reasonForClosure, int? linkedCandidateId)
+{
+    var position = _context.Positions.Find(positionId);
+    if (position == null) throw new Exception("Position not found");
+
+    position.Status = "Closed";
+    position.ReasonForClosure = reasonForClosure;
+    position.PositionClosedDate = DateTime.Now;
+    
+    if (linkedCandidateId.HasValue)
+    {
+        position.LinkedCandidateID = linkedCandidateId;
+    }
+
+    _context.SaveChanges();
+}
+2. Updating the Controller to Support Closing Positions
+Modify PositionController.cs:
+
+csharp
+Copy
+Edit
+[HttpPost]
+public IActionResult ClosePosition(int id, string reasonForClosure, int? linkedCandidateId)
+{
+    try
+    {
+        _positionService.ClosePosition(id, reasonForClosure, linkedCandidateId);
+        return RedirectToAction("Index");
+    }
+    catch (Exception ex)
+    {
+        ModelState.AddModelError("", ex.Message);
+        return RedirectToAction("Index");
+    }
+}
+3. Updating Index.cshtml to Implement Expandable Job Details
+Modify Views/Position/Index.cshtml:
+
+html
+Copy
+Edit
+@model IEnumerable<Position>
+
+@{
+    ViewData["Title"] = "Job Positions";
+}
+
+<h2>Job Positions</h2>
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Job Title</th>
+            <th>Required Skills</th>
+            <th>Preferred Skills</th>
+            <th>Years of Experience</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var position in Model)
+        {
+            <tr>
+                <td>@position.JobTitle</td>
+                <td>@position.MinRequiredSkills</td>
+                <td>@position.PreferredSkills</td>
+                <td>@position.YearsOfExperience</td>
+                <td>@position.Status</td>
+                <td>
+                    <button class="btn btn-info" onclick="toggleDetails(@position.PositionID)">Expand</button>
+                    @if (position.Status != "Closed")
+                    {
+                        <button class="btn btn-danger" onclick="openCloseModal(@position.PositionID)">Close</button>
+                    }
+                </td>
+            </tr>
+            <tr id="details-@position.PositionID" style="display: none;">
+                <td colspan="6">
+                    <strong>Job Description:</strong> @position.JobDescription <br />
+                    <strong>Position Closed Date:</strong> @(position.PositionClosedDate?.ToString("yyyy-MM-dd") ?? "N/A") <br />
+                    <strong>Reason for Closure:</strong> @(position.ReasonForClosure ?? "N/A") <br />
+                    <strong>Linked Candidate:</strong> @(position.LinkedCandidate?.FullName ?? "N/A")
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<!-- Close Position Modal -->
+<div class="modal fade" id="closePositionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Close Position</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="closePositionForm" method="post" asp-action="ClosePosition">
+                    <input type="hidden" name="id" id="positionId" />
+                    <div class="mb-3">
+                        <label for="reasonForClosure" class="form-label">Reason for Closure</label>
+                        <input type="text" class="form-control" name="reasonForClosure" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="linkedCandidateId" class="form-label">Linked Candidate (Optional)</label>
+                        <select class="form-control" name="linkedCandidateId">
+                            <option value="">None</option>
+                            @foreach (var candidate in ViewBag.Candidates)
+                            {
+                                <option value="@candidate.CandidateID">@candidate.FullName</option>
+                            }
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-danger">Close Position</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleDetails(positionId) {
+        var detailsRow = document.getElementById('details-' + positionId);
+        detailsRow.style.display = detailsRow.style.display === 'none' ? '' : 'none';
+    }
+
+    function openCloseModal(positionId) {
+        document.getElementById('positionId').value = positionId;
+        var closeModal = new bootstrap.Modal(document.getElementById('closePositionModal'));
+        closeModal.show();
+    }
+</script>
+4. Passing Candidates to the View
+Modify PositionController.cs:
+
+csharp
+Copy
+Edit
+public IActionResult Index()
+{
+    var positions = _positionService.GetAllPositions();
+    ViewBag.Candidates = _context.Candidates.ToList();
+    return View(positions);
+}

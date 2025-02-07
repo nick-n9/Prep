@@ -1,0 +1,153 @@
+Step 1: Install Dependencies
+Add the following NuGet packages to your .NET Core 8 project:
+
+powershell
+Copy
+Edit
+dotnet add package iTextSharp.LGPLv2.Core  # For reading PDFs
+dotnet add package DocumentFormat.OpenXml  # For reading Word files
+Step 2: Modify PositionController
+Update the Apply action to read CV content, extract key details, and pre-fill the form.
+
+csharp
+Copy
+Edit
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Hosting;
+using System;
+using System.IO;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using iTextSharp.text.pdf;
+using iTextSharp.text.pdf.parser;
+using DocumentFormat.OpenXml.Packaging;
+using YourNamespace.Models;
+using YourNamespace.Services;
+
+public class PositionController : Controller
+{
+    private readonly IWebHostEnvironment _webHostEnvironment;
+
+    public PositionController(IWebHostEnvironment webHostEnvironment)
+    {
+        _webHostEnvironment = webHostEnvironment;
+    }
+
+    [HttpGet]
+    public IActionResult Apply(int positionId)
+    {
+        ViewBag.PositionId = positionId;
+        return View(new Candidate());
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Apply(Candidate candidate, IFormFile cvFile)
+    {
+        if (cvFile != null)
+        {
+            string extractedText = await ExtractTextFromCV(cvFile);
+
+            // Extract details using regex (you can enhance this)
+            candidate.FullName = ExtractDetail(extractedText, @"(?i)Name[:\s]+([^\n\r]+)");
+            candidate.Email = ExtractDetail(extractedText, @"(?i)[\w\.-]+@[\w\.-]+\.\w+");
+            candidate.PhoneNumber = ExtractDetail(extractedText, @"\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}");
+
+            TempData["ExtractedCandidate"] = candidate;
+        }
+
+        return RedirectToAction("ApplyWithData", new { positionId = ViewBag.PositionId });
+    }
+
+    [HttpGet]
+    public IActionResult ApplyWithData(int positionId)
+    {
+        ViewBag.PositionId = positionId;
+        var candidate = TempData["ExtractedCandidate"] as Candidate ?? new Candidate();
+        return View("Apply", candidate);
+    }
+
+    private async Task<string> ExtractTextFromCV(IFormFile file)
+    {
+        string text = "";
+        var extension = Path.GetExtension(file.FileName).ToLower();
+
+        using (var stream = file.OpenReadStream())
+        {
+            if (extension == ".pdf")
+                text = ExtractTextFromPdf(stream);
+            else if (extension == ".doc" || extension == ".docx")
+                text = ExtractTextFromWord(stream);
+            else if (extension == ".txt")
+                text = await new StreamReader(stream).ReadToEndAsync();
+        }
+
+        return text;
+    }
+
+    private string ExtractTextFromPdf(Stream pdfStream)
+    {
+        using (PdfReader reader = new PdfReader(pdfStream))
+        {
+            StringBuilder text = new StringBuilder();
+            for (int i = 1; i <= reader.NumberOfPages; i++)
+            {
+                text.Append(PdfTextExtractor.GetTextFromPage(reader, i));
+            }
+            return text.ToString();
+        }
+    }
+
+    private string ExtractTextFromWord(Stream docStream)
+    {
+        using (WordprocessingDocument doc = WordprocessingDocument.Open(docStream, false))
+        {
+            return doc.MainDocumentPart.Document.Body.InnerText;
+        }
+    }
+
+    private string ExtractDetail(string text, string pattern)
+    {
+        var match = Regex.Match(text, pattern);
+        return match.Success ? match.Groups[1].Value.Trim() : "";
+    }
+}
+Step 3: Update Apply.cshtml
+Modify the form to pre-fill extracted values from the CV.
+
+html
+Copy
+Edit
+@model Candidate
+
+<h2>Apply for Position</h2>
+
+<form asp-controller="Position" asp-action="Apply" method="post" enctype="multipart/form-data">
+    <input type="hidden" asp-for="CandidateID" />
+
+    <div class="form-group">
+        <label asp-for="FullName">Full Name</label>
+        <input asp-for="FullName" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label asp-for="Email">Email</label>
+        <input asp-for="Email" type="email" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label asp-for="PhoneNumber">Phone Number</label>
+        <input asp-for="PhoneNumber" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label for="cvFile">Upload CV (PDF, DOC, TXT)</label>
+        <input type="file" name="cvFile" class="form-control" accept=".pdf,.doc,.docx,.txt" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Submit Application</button>
+</form>
+Step 4: Testing the Feature
+Upload a PDF, Word, or TXT file.
+The system extracts details (Name, Email, Phone).
+The Apply form pre-fills these details.
+The user can edit or add missing fields before submitti

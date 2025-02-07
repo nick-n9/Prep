@@ -1,1 +1,205 @@
+Step 1: Modify Job Listing (Index.cshtml)
+In Views/Position/Index.cshtml, add an Apply button next to each job.
 
+html
+Copy
+Edit
+@model IEnumerable<Position>
+
+<table class="table table-bordered">
+    <thead class="thead-dark">
+        <tr>
+            <th>Job Title</th>
+            <th>Required Skills</th>
+            <th>Preferred Skills</th>
+            <th>Years of Experience</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var job in Model)
+        {
+            <tr>
+                <td>@job.JobTitle</td>
+                <td>@job.MinRequiredSkills</td>
+                <td>@job.PreferredSkills</td>
+                <td>@job.YearsOfExperience</td>
+                <td>@job.Status</td>
+                <td>
+                    <a asp-controller="Position" asp-action="Apply" asp-route-positionId="@job.PositionID" class="btn btn-success">
+                        Apply
+                    </a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+Step 2: Create Apply View (Apply.cshtml)
+Create a new view at Views/Position/Apply.cshtml to allow candidates to apply and upload their CV.
+
+html
+Copy
+Edit
+@model Candidate
+
+<h2>Apply for Position</h2>
+
+<form asp-controller="Position" asp-action="Apply" method="post" enctype="multipart/form-data">
+    <input type="hidden" asp-for="CandidateID" />
+
+    <div class="form-group">
+        <label asp-for="FullName">Full Name</label>
+        <input asp-for="FullName" class="form-control" required />
+    </div>
+
+    <div class="form-group">
+        <label asp-for="Email">Email</label>
+        <input asp-for="Email" type="email" class="form-control" required />
+    </div>
+
+    <div class="form-group">
+        <label asp-for="PhoneNumber">Phone Number</label>
+        <input asp-for="PhoneNumber" class="form-control" required />
+    </div>
+
+    <div class="form-group">
+        <label for="cvFile">Upload CV (PDF, DOC, TXT)</label>
+        <input type="file" name="cvFile" class="form-control" accept=".pdf,.doc,.docx,.txt" required />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Submit Application</button>
+</form>
+Step 3: Implement Controller (PositionController)
+Modify PositionController.cs to handle the Apply logic.
+
+csharp
+Copy
+Edit
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Hosting;
+using System;
+using System.IO;
+using System.Threading.Tasks;
+using YourNamespace.Models;
+using YourNamespace.Services;
+
+public class PositionController : Controller
+{
+    private readonly ICandidateService _candidateService;
+    private readonly IWebHostEnvironment _webHostEnvironment;
+
+    public PositionController(ICandidateService candidateService, IWebHostEnvironment webHostEnvironment)
+    {
+        _candidateService = candidateService;
+        _webHostEnvironment = webHostEnvironment;
+    }
+
+    [HttpGet]
+    public IActionResult Apply(int positionId)
+    {
+        ViewBag.PositionId = positionId;
+        return View();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Apply(Candidate candidate, IFormFile cvFile)
+    {
+        if (ModelState.IsValid && cvFile != null)
+        {
+            // Save CV File
+            var uploadsFolder = Path.Combine(_webHostEnvironment.WebRootPath, "uploads");
+            if (!Directory.Exists(uploadsFolder))
+            {
+                Directory.CreateDirectory(uploadsFolder);
+            }
+
+            var uniqueFileName = $"{Guid.NewGuid()}_{cvFile.FileName}";
+            var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+            using (var fileStream = new FileStream(filePath, FileMode.Create))
+            {
+                await cvFile.CopyToAsync(fileStream);
+            }
+
+            candidate.ResumePath = "/uploads/" + uniqueFileName;
+
+            // Save candidate to DB
+            _candidateService.AddCandidate(candidate);
+            return RedirectToAction("Index", "Position");
+        }
+
+        return View(candidate);
+    }
+}
+Step 4: Implement Service and Repository Layers
+Service Layer:
+
+csharp
+Copy
+Edit
+using YourNamespace.Models;
+using YourNamespace.Repositories;
+
+public class CandidateService : ICandidateService
+{
+    private readonly ICandidateRepository _candidateRepository;
+
+    public CandidateService(ICandidateRepository candidateRepository)
+    {
+        _candidateRepository = candidateRepository;
+    }
+
+    public void AddCandidate(Candidate candidate)
+    {
+        _candidateRepository.Add(candidate);
+    }
+}
+Repository Layer:
+
+csharp
+Copy
+Edit
+using YourNamespace.Data;
+using YourNamespace.Models;
+
+public class CandidateRepository : ICandidateRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public CandidateRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public void Add(Candidate candidate)
+    {
+        _context.Candidates.Add(candidate);
+        _context.SaveChanges();
+    }
+}
+Step 5: Register Dependencies in Program.cs
+Since we're in .NET Core 8, we need to register the services in Program.cs.
+
+csharp
+Copy
+Edit
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services
+builder.Services.AddControllersWithViews();
+builder.Services.AddScoped<ICandidateService, CandidateService>();
+builder.Services.AddScoped<ICandidateRepository, CandidateRepository>();
+
+var app = builder.Build();
+
+// Configure middleware
+app.UseStaticFiles();
+app.UseRouting();
+app.UseAuthorization();
+
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller=Position}/{action=Index}/{id?}");
+
+app.Run();

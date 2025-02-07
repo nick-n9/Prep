@@ -1,0 +1,130 @@
+public class Position
+{
+    [Key]
+    public int PositionID { get; set; }
+
+    [Required, MaxLength(255)]
+    public string JobTitle { get; set; }
+
+    public string JobDescription { get; set; }
+    public string MinRequiredSkills { get; set; }
+    public string PreferredSkills { get; set; }
+
+    [MaxLength(50)]
+    public string Status { get; set; }
+
+    public string ReasonForClosure { get; set; }
+    public DateTime? PositionClosedDate { get; set; }
+
+    public int? LinkedCandidateID { get; set; }
+    public Candidate LinkedCandidate { get; set; }
+
+    public int? YearsOfExperience { get; set; }  // Added field
+
+    public DateTime CreatedDate { get; set; } = DateTime.Now;
+    public DateTime? ModifiedDate { get; set; }
+
+    public ICollection<PositionSkill> PositionSkills { get; set; }
+    public ICollection<CandidateReview> CandidateReviews { get; set; }
+    public ICollection<Interview> Interviews { get; set; }
+}
+
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    base.OnModelCreating(modelBuilder);
+
+    // Position-Candidate one-to-one (nullable)
+    modelBuilder.Entity<Position>()
+        .HasOne(p => p.LinkedCandidate)
+        .WithMany()  // Ensure no cyclic relationship
+        .HasForeignKey(p => p.LinkedCandidateID)
+        .OnDelete(DeleteBehavior.SetNull); // Avoid cascade delete in case candidate is deleted
+
+    // Position-Skill many-to-many
+    modelBuilder.Entity<PositionSkill>()
+        .HasOne(ps => ps.Position)
+        .WithMany(p => p.PositionSkills)
+        .HasForeignKey(ps => ps.PositionID);
+
+    modelBuilder.Entity<PositionSkill>()
+        .HasOne(ps => ps.Skill)
+        .WithMany(s => s.PositionSkills)
+        .HasForeignKey(ps => ps.SkillID);
+
+    // Candidate-Skill many-to-many
+    modelBuilder.Entity<CandidateSkill>()
+        .HasOne(cs => cs.Candidate)
+        .WithMany(c => c.CandidateSkills)
+        .HasForeignKey(cs => cs.CandidateID);
+
+    modelBuilder.Entity<CandidateSkill>()
+        .HasOne(cs => cs.Skill)
+        .WithMany(s => s.CandidateSkills)
+        .HasForeignKey(cs => cs.SkillID);
+
+    // Candidate-Document one-to-many
+    modelBuilder.Entity<CandidateDocument>()
+        .HasOne(cd => cd.Candidate)
+        .WithMany(c => c.CandidateDocuments)
+        .HasForeignKey(cd => cd.CandidateID);
+
+    // CandidateReview foreign keys
+    modelBuilder.Entity<CandidateReview>()
+        .HasOne(cr => cr.Candidate)
+        .WithMany(c => c.CandidateReviews)
+        .HasForeignKey(cr => cr.CandidateID);
+
+    modelBuilder.Entity<CandidateReview>()
+        .HasOne(cr => cr.Position)
+        .WithMany(p => p.CandidateReviews)
+        .HasForeignKey(cr => cr.PositionID);
+
+    modelBuilder.Entity<CandidateReview>()
+        .HasOne(cr => cr.Reviewer)
+        .WithMany()
+        .HasForeignKey(cr => cr.ReviewerID);
+
+    // Interview foreign keys
+    modelBuilder.Entity<Interview>()
+        .HasOne(i => i.Candidate)
+        .WithMany(c => c.Interviews)
+        .HasForeignKey(i => i.CandidateID);
+
+    modelBuilder.Entity<Interview>()
+        .HasOne(i => i.Position)
+        .WithMany(p => p.Interviews)
+        .HasForeignKey(i => i.PositionID);
+
+    modelBuilder.Entity<Interview>()
+        .HasOne(i => i.Interviewer)
+        .WithMany()
+        .HasForeignKey(i => i.InterviewerID);
+
+    // DocumentVerification foreign keys
+    modelBuilder.Entity<DocumentVerification>()
+        .HasOne(dv => dv.Candidate)
+        .WithMany()
+        .HasForeignKey(dv => dv.CandidateID);
+
+    modelBuilder.Entity<DocumentVerification>()
+        .HasOne(dv => dv.Verifier)
+        .WithMany()
+        .HasForeignKey(dv => dv.VerifiedBy);
+
+    // CandidateStatusHistory foreign keys
+    modelBuilder.Entity<CandidateStatusHistory>()
+        .HasOne(csh => csh.Candidate)
+        .WithMany(c => c.CandidateStatusHistories)
+        .HasForeignKey(csh => csh.CandidateID);
+
+    modelBuilder.Entity<CandidateStatusHistory>()
+        .HasOne(csh => csh.ChangedUser)
+        .WithMany()
+        .HasForeignKey(csh => csh.ChangedBy);
+
+    // Notifications foreign keys
+    modelBuilder.Entity<Notification>()
+        .HasOne(n => n.User)
+        .WithMany()
+        .HasForeignKey(n => n.UserID);
+}

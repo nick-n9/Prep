@@ -1,3 +1,26 @@
+[HttpPost]
+public async Task<IActionResult> Apply(Candidate candidate, IFormFile cvFile)
+{
+    if (cvFile != null)
+    {
+        string extractedText = await ExtractTextFromCV(cvFile);
+
+        // Store extracted text in the candidate model
+        candidate.ExtractedText = extractedText;
+
+        // Extract details using regex
+        candidate.FullName = ExtractDetail(extractedText, @"(?i)Name[:\s]+([^\n\r]+)");
+        candidate.Email = ExtractDetail(extractedText, @"(?i)[\w\.-]+@[\w\.-]+\.\w+");
+        candidate.PhoneNumber = ExtractDetail(extractedText, @"\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}");
+
+        // Store candidate data in TempData for the next step
+        TempData["ExtractedCandidate"] = JsonConvert.SerializeObject(candidate);
+    }
+
+    return RedirectToAction("ApplyWithData", new { positionId = ViewBag.PositionId });
+}
+
+
 1️⃣ Improve Regex Extraction
 The previous regex patterns were basic. Let's refine them for better accuracy:
 

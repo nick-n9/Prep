@@ -1,0 +1,346 @@
+1️⃣ Define Interview Rounds for Each Position
+Controller Update
+📂 Controllers/InterviewController.cs
+
+csharp
+Copy
+Edit
+[HttpPost]
+public async Task<IActionResult> DefineInterviewRounds(int positionId, List<string> roundTypes)
+{
+    var existingRounds = await _context.InterviewRounds
+        .Where(r => r.Interview.PositionID == positionId)
+        .ToListAsync();
+
+    if (existingRounds.Any())
+    {
+        _context.InterviewRounds.RemoveRange(existingRounds);
+    }
+
+    foreach (var roundType in roundTypes)
+    {
+        _context.InterviewRounds.Add(new InterviewRound
+        {
+            InterviewID = positionId,  // Using InterviewID as PositionID since we don't have a separate table
+            RoundType = roundType,
+            RoundNumber = roundTypes.IndexOf(roundType) + 1
+        });
+    }
+
+    await _context.SaveChangesAsync();
+    return RedirectToAction("ManageInterviewRounds", new { positionId });
+}
+2️⃣ Schedule an Interview with Custom Rounds
+📂 Controllers/InterviewController.cs
+
+csharp
+Copy
+Edit
+[HttpPost]
+public async Task<IActionResult> ScheduleInterview(int candidateId, int positionId, List<int> interviewerIds, DateTime interviewDate)
+{
+    var interview = new Interview
+    {
+        CandidateID = candidateId,
+        PositionID = positionId,
+        InterviewDate = interviewDate,
+        Status = "Scheduled"
+    };
+
+    _context.Interviews.Add(interview);
+    await _context.SaveChangesAsync();
+
+    // Assign multiple interviewers for panel interviews
+    foreach (var interviewerId in interviewerIds)
+    {
+        _context.InterviewFeedback.Add(new InterviewFeedback
+        {
+            InterviewRoundID = interview.InterviewID,
+            InterviewerID = interviewerId
+        });
+    }
+
+    await _context.SaveChangesAsync();
+
+    // Send meeting invite
+    await SendMeetingInvites(candidateId, interviewerIds, interviewDate);
+
+    return RedirectToAction("InterviewDetails", new { interviewId = interview.InterviewID });
+}
+3️⃣ Send Meeting Invites
+📂 Services/InterviewService.cs
+
+csharp
+Copy
+Edit
+public async Task SendMeetingInvites(int candidateId, List<int> interviewerIds, DateTime interviewDate)
+{
+    var candidate = await _context.Candidates.FindAsync(candidateId);
+    var interviewers = await _context.Users
+        .Where(u => interviewerIds.Contains(u.Id))
+        .ToListAsync();
+
+    string subject = "Interview Scheduled - " + interviewDate.ToString("yyyy-MM-dd HH:mm");
+    string body = $"Dear {candidate.FullName},\n\nYou have an interview scheduled on {interviewDate}. \nPlease be prepared.\n\nBest regards,\nHR Team";
+
+    // Send invite to candidate
+    await _emailService.SendEmailAsync(candidate.Email, subject, body);
+
+    // Send invite to interviewers
+    foreach (var interviewer in interviewers)
+    {
+        await _emailService.SendEmailAsync(interviewer.Email, subject, "You are assigned to interview " + candidate.FullName);
+    }
+}
+4️⃣ Bulk Interview Scheduling (Walk-ins & Campus Recruitment)
+📂 Controllers/InterviewController.cs
+
+csharp
+Copy
+Edit
+[HttpPost]
+public async Task<IActionResult> BulkScheduleInterviews(List<int> candidateIds, int positionId, DateTime interviewDate)
+{
+    foreach (var candidateId in candidateIds)
+    {
+        var interview = new Interview
+        {
+            CandidateID = candidateId,
+            PositionID = positionId,
+            InterviewDate = interviewDate,
+            Status = "Scheduled"
+        };
+
+        _context.Interviews.Add(interview);
+    }
+
+    await _context.SaveChangesAsync();
+    return RedirectToAction("ManageInterviews", new { positionId });
+}
+5️⃣ UI for Scheduling & Managing Interviews
+📂 Views/Interview/ScheduleInterview.cshtml
+
+html
+Copy
+Edit
+<h2>Schedule Interview</h2>
+
+<form asp-action="ScheduleInterview" method="post">
+    <input type="hidden" name="positionId" value="@ViewBag.PositionId" />
+    
+    <label>Select Candidate:</label>
+    <select name="candidateId" class="form-control">
+        @foreach (var candidate in ViewBag.Candidates)
+        {
+            <option value="@candidate.CandidateID">@candidate.FullName</option>
+        }
+    </select>
+
+    <label>Select Interviewers (Panel Interview Supported):</label>
+    <select name="interviewerIds" class="form-control" multiple>
+        @foreach (var interviewer in ViewBag.Interviewers)
+        {
+            <option value="@interviewer.Id">@interviewer.FullName</option>
+        }
+    </select>
+
+    <label>Select Interview Date:</label>
+    <input type="datetime-local" name="interviewDate" class="form-control" required />
+
+    <button type="submit" class="btn btn-primary">Schedule Interview</button>
+</form>
+🔥 Final Outcome
+--------------------
+
+
+1️⃣ Calendar-Based Scheduling (UI & Backend)
+📂 Views/Interview/ManageInterviews.cshtml
+🎨 Better UI for Scheduling Interviews Using FullCalendar.js
+html
+Copy
+Edit
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/5.11.3/main.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/5.11.3/main.min.js"></script>
+
+<div id="calendar"></div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var calendarEl = document.getElementById('calendar');
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            events: '/Interview/GetScheduledInterviews', // Fetch scheduled interviews from API
+            dateClick: function (info) {
+                window.location.href = '/Interview/ScheduleInterview?date=' + info.dateStr;
+            }
+        });
+        calendar.render();
+    });
+</script>
+🎯 What This Does?
+Displays scheduled interviews in a monthly calendar view.
+Clicking on a date redirects to scheduling form with pre-filled date.
+2️⃣ Get Scheduled Interviews (API for FullCalendar)
+📂 Controllers/InterviewController.cs
+
+csharp
+Copy
+Edit
+[HttpGet]
+public async Task<IActionResult> GetScheduledInterviews()
+{
+    var interviews = await _context.Interviews
+        .Include(i => i.Candidate)
+        .Include(i => i.Position)
+        .Select(i => new {
+            title = $"{i.Candidate.FullName} - {i.Position.JobTitle}",
+            start = i.InterviewDate,
+            url = Url.Action("InterviewDetails", new { interviewId = i.InterviewID })
+        })
+        .ToListAsync();
+
+    return Json(interviews);
+}
+🎯 What This Does?
+Fetches scheduled interviews and formats them for FullCalendar.js.
+Clicking an event opens interview details page.
+3️⃣ Automated Interviewer Assignment Based on Skills
+📂 Services/InterviewService.cs
+
+csharp
+Copy
+Edit
+public async Task<List<User>> GetBestInterviewers(int positionId)
+{
+    var positionSkills = await _context.PositionSkills
+        .Where(ps => ps.PositionID == positionId)
+        .Select(ps => ps.SkillID)
+        .ToListAsync();
+
+    var bestInterviewers = await _context.Users
+        .Where(u => _context.InterviewerSkills
+            .Any(is => is.InterviewerID == u.Id && positionSkills.Contains(is.SkillID)))
+        .ToListAsync();
+
+    return bestInterviewers;
+}
+📂 Controllers/InterviewController.cs
+
+csharp
+Copy
+Edit
+[HttpGet]
+public async Task<IActionResult> GetBestInterviewers(int positionId)
+{
+    var interviewers = await _interviewService.GetBestInterviewers(positionId);
+    return Json(interviewers);
+}
+📂 AJAX Call in UI to Auto-Populate Interviewers
+
+html
+Copy
+Edit
+<script>
+    function loadBestInterviewers(positionId) {
+        $.get('/Interview/GetBestInterviewers?positionId=' + positionId, function (data) {
+            $('#interviewerDropdown').empty();
+            data.forEach(i => $('#interviewerDropdown').append(`<option value="${i.id}">${i.fullName}</option>`));
+        });
+    }
+</script>
+🎯 What This Does?
+Fetches interviewers with matching skills for the job.
+Reduces manual effort in assigning interviewers.
+4️⃣ Reschedule & Cancel Interview
+📂 Controllers/InterviewController.cs
+
+csharp
+Copy
+Edit
+[HttpPost]
+public async Task<IActionResult> RescheduleInterview(int interviewId, DateTime newDate)
+{
+    var interview = await _context.Interviews.FindAsync(interviewId);
+    if (interview == null) return NotFound();
+
+    interview.InterviewDate = newDate;
+    interview.Status = "Rescheduled";
+    await _context.SaveChangesAsync();
+
+    await _notificationService.SendInterviewNotification(interview.CandidateID, "Your interview has been rescheduled.");
+    return RedirectToAction("InterviewDetails", new { interviewId });
+}
+
+[HttpPost]
+public async Task<IActionResult> CancelInterview(int interviewId)
+{
+    var interview = await _context.Interviews.FindAsync(interviewId);
+    if (interview == null) return NotFound();
+
+    _context.Interviews.Remove(interview);
+    await _context.SaveChangesAsync();
+
+    await _notificationService.SendInterviewNotification(interview.CandidateID, "Your interview has been canceled.");
+    return RedirectToAction("ManageInterviews");
+}
+📂 Views/Interview/InterviewDetails.cshtml
+
+html
+Copy
+Edit
+<form asp-action="RescheduleInterview" method="post">
+    <input type="hidden" name="interviewId" value="@Model.InterviewID" />
+    <label>New Date:</label>
+    <input type="datetime-local" name="newDate" class="form-control" required />
+    <button type="submit" class="btn btn-warning">Reschedule</button>
+</form>
+
+<form asp-action="CancelInterview" method="post">
+    <input type="hidden" name="interviewId" value="@Model.InterviewID" />
+    <button type="submit" class="btn btn-danger">Cancel Interview</button>
+</form>
+🎯 What This Does?
+Allows rescheduling interviews with a new date.
+Supports canceling interviews, removing them from the system.
+5️⃣ Notifications for Every Important Action
+📂 Services/NotificationService.cs
+
+csharp
+Copy
+Edit
+public async Task SendInterviewNotification(int candidateId, string message)
+{
+    var candidate = await _context.Candidates.FindAsync(candidateId);
+    if (candidate == null) return;
+
+    _context.Notifications.Add(new Notification
+    {
+        UserID = candidateId,
+        Message = message,
+        CreatedDate = DateTime.Now
+    });
+
+    await _context.SaveChangesAsync();
+}
+📂 Controllers/InterviewController.cs
+
+csharp
+Copy
+Edit
+await _notificationService.SendInterviewNotification(candidateId, "You have an interview scheduled on " + interviewDate);
+📂 Views/Shared/_Layout.cshtml
+
+html
+Copy
+Edit
+<div id="notifications">
+    @foreach (var notification in ViewBag.Notifications)
+    {
+        <div class="alert alert-info">@notification.Message</div>
+    }
+</div>
+🎯 What This Does?
+Notifies candidates when an interview is scheduled, rescheduled, or canceled.
+Displays notifications in the UI.
+
+  

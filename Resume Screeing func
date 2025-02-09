@@ -1,0 +1,591 @@
+📌 Step 1: Define the Repository Layer
+We'll define an interface ICandidateReviewRepository and its implementation CandidateReviewRepository to interact with the database.
+
+1️⃣ Define Repository Interface
+📂 Repositories/ICandidateReviewRepository.cs
+
+csharp
+Copy
+Edit
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using YourProjectNamespace.Models;
+
+public interface ICandidateReviewRepository
+{
+    Task<bool> AssignReviewer(int positionId, int reviewerId);
+    Task<List<Candidate>> GetCandidatesForReview(int positionId);
+    Task<CandidateReview> GetReview(int candidateId, int positionId, int reviewerId);
+    Task<bool> SubmitReview(CandidateReview review, Candidate candidate, List<CandidateSkill> skills);
+    Task<List<CandidateReview>> GetCandidateScreeningHistory(int candidateId);
+}
+2️⃣ Implement Repository Layer
+📂 Repositories/CandidateReviewRepository.cs
+
+csharp
+Copy
+Edit
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using YourProjectNamespace.Data;
+using YourProjectNamespace.Models;
+
+public class CandidateReviewRepository : ICandidateReviewRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public CandidateReviewRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    // ✅ Assign a reviewer to a position
+    public async Task<bool> AssignReviewer(int positionId, int reviewerId)
+    {
+        var position = await _context.Positions.FindAsync(positionId);
+        if (position == null || position.Status == "Closed")
+            return false;
+
+        var existingReview = await _context.CandidateReviews
+            .FirstOrDefaultAsync(r => r.PositionID == positionId && r.ReviewerID == reviewerId);
+
+        if (existingReview == null)
+        {
+            var review = new CandidateReview
+            {
+                PositionID = positionId,
+                ReviewerID = reviewerId,
+                ReviewDate = DateTime.Now,
+                Status = "Pending"
+            };
+
+            _context.CandidateReviews.Add(review);
+            await _context.SaveChangesAsync();
+        }
+        return true;
+    }
+
+    // ✅ Get candidates assigned for review
+    public async Task<List<Candidate>> GetCandidatesForReview(int positionId)
+    {
+        return await _context.Candidates
+            .Where(c => _context.CandidateReviews.Any(r => r.PositionID == positionId && r.CandidateID == c.CandidateID))
+            .ToListAsync();
+    }
+
+    // ✅ Get an existing review
+    public async Task<CandidateReview> GetReview(int candidateId, int positionId, int reviewerId)
+    {
+        return await _context.CandidateReviews
+            .FirstOrDefaultAsync(r => r.CandidateID == candidateId && r.PositionID == positionId && r.ReviewerID == reviewerId);
+    }
+
+    // ✅ Submit a review
+    public async Task<bool> SubmitReview(CandidateReview review, Candidate candidate, List<CandidateSkill> skills)
+    {
+        if (review == null || candidate == null)
+            return false;
+
+        // Save selected skills
+        foreach (var skill in skills)
+        {
+            var existingSkill = await _context.CandidateSkills
+                .FirstOrDefaultAsync(cs => cs.CandidateID == candidate.CandidateID && cs.SkillID == skill.SkillID);
+
+            if (existingSkill == null)
+            {
+                _context.CandidateSkills.Add(new CandidateSkill
+                {
+                    CandidateID = candidate.CandidateID,
+                    SkillID = skill.SkillID,
+                    YearsOfExperience = skill.YearsOfExperience
+                });
+            }
+            else
+            {
+                existingSkill.YearsOfExperience = skill.YearsOfExperience;
+            }
+        }
+
+        _context.CandidateReviews.Update(review);
+        _context.Candidates.Update(candidate);
+
+        // If shortlisted, move to interview stage
+        if (review.Status == "Shortlisted")
+        {
+            _context.Interviews.Add(new Interview
+            {
+                CandidateID = candidate.CandidateID,
+                PositionID = review.PositionID,
+                InterviewDate = DateTime.Now.AddDays(3), // Default to 3 days later
+                InterviewType = "Technical",
+                Status = "Scheduled"
+            });
+        }
+
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    // ✅ Get screening history for a candidate
+    public async Task<List<CandidateReview>> GetCandidateScreeningHistory(int candidateId)
+    {
+        return await _context.CandidateReviews
+            .Where(r => r.CandidateID == candidateId)
+            .OrderByDescending(r => r.ReviewDate)
+            .ToListAsync();
+    }
+}
+📌 Step 2: Define the Service Layer
+We'll create an interface ICandidateReviewService and an implementation CandidateReviewService.
+
+3️⃣ Define Service Interface
+📂 Services/ICandidateReviewService.cs
+
+csharp
+Copy
+Edit
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using YourProjectNamespace.Models;
+
+public interface ICandidateReviewService
+{
+    Task<bool> AssignReviewer(int positionId, int reviewerId);
+    Task<List<Candidate>> GetCandidatesForReview(int positionId);
+    Task<bool> SubmitReview(int candidateId, int positionId, int reviewerId, string comments, string status, List<CandidateSkill> skills);
+    Task<List<CandidateReview>> GetCandidateScreeningHistory(int candidateId);
+}
+4️⃣ Implement Service Layer
+📂 Services/CandidateReviewService.cs
+
+csharp
+Copy
+Edit
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using YourProjectNamespace.Models;
+using YourProjectNamespace.Repositories;
+
+public class CandidateReviewService : ICandidateReviewService
+{
+    private readonly ICandidateReviewRepository _reviewRepository;
+
+    public CandidateReviewService(ICandidateReviewRepository reviewRepository)
+    {
+        _reviewRepository = reviewRepository;
+    }
+
+    public async Task<bool> AssignReviewer(int positionId, int reviewerId)
+    {
+        return await _reviewRepository.AssignReviewer(positionId, reviewerId);
+    }
+
+    public async Task<List<Candidate>> GetCandidatesForReview(int positionId)
+    {
+        return await _reviewRepository.GetCandidatesForReview(positionId);
+    }
+
+    public async Task<bool> SubmitReview(int candidateId, int positionId, int reviewerId, string comments, string status, List<CandidateSkill> skills)
+    {
+        var review = await _reviewRepository.GetReview(candidateId, positionId, reviewerId);
+        if (review == null)
+            return false;
+
+        review.Comments = comments;
+        review.Status = status;
+        review.ReviewDate = DateTime.Now;
+
+        var candidate = await _context.Candidates.FindAsync(candidateId);
+        if (candidate != null)
+        {
+            candidate.ProfileStatus = status;
+        }
+
+        return await _reviewRepository.SubmitReview(review, candidate, skills);
+    }
+
+    public async Task<List<CandidateReview>> GetCandidateScreeningHistory(int candidateId)
+    {
+        return await _reviewRepository.GetCandidateScreeningHistory(candidateId);
+    }
+}
+📌 Step 3: Implement Controller
+📂 Controllers/CandidateReviewController.cs
+
+csharp
+Copy
+Edit
+[Route("api/[controller]")]
+[ApiController]
+public class CandidateReviewController : ControllerBase
+{
+    private readonly ICandidateReviewService _reviewService;
+
+    public CandidateReviewController(ICandidateReviewService reviewService)
+    {
+        _reviewService = reviewService;
+    }
+
+    [HttpPost("assign-reviewer")]
+    public async Task<IActionResult> AssignReviewer(int positionId, int reviewerId)
+    {
+        return Ok(await _reviewService.AssignReviewer(positionId, reviewerId));
+    }
+
+    [HttpGet("candidates-for-review/{positionId}")]
+    public async Task<IActionResult> GetCandidatesForReview(int positionId)
+    {
+        return Ok(await _reviewService.GetCandidatesForReview(positionId));
+    }
+
+    [HttpPost("submit-review")]
+    public async Task<IActionResult> SubmitReview(int candidateId, int positionId, int reviewerId, string comments, string status, List<CandidateSkill> skills)
+    {
+        return Ok(await _reviewService.SubmitReview(candidateId, positionId, reviewerId, comments, status, skills));
+    }
+}
+✅ Summary
+Repository & Service Layers Implemented Properly.
+No New Models Introduced.
+Optimized Code With Proper Structure.
+
+
+
+📌 Step 1: Modify ViewModel for UI Binding
+We will use a ViewModel to keep the views clean and ensure only relevant data is passed between the UI and the backend.
+
+📂 ViewModels/CandidateReviewViewModel.cs
+
+csharp
+Copy
+Edit
+using System.ComponentModel.DataAnnotations;
+using YourProjectNamespace.Models;
+
+public class CandidateReviewViewModel
+{
+    public int CandidateID { get; set; }
+    public int PositionID { get; set; }
+    public int ReviewerID { get; set; }
+
+    [Required(ErrorMessage = "Comments are required.")]
+    [StringLength(1000, ErrorMessage = "Comments cannot exceed 1000 characters.")]
+    public string Comments { get; set; }
+
+    [Required(ErrorMessage = "Please select a status.")]
+    public string Status { get; set; }
+
+    public List<CandidateSkillViewModel> CandidateSkills { get; set; }
+}
+
+public class CandidateSkillViewModel
+{
+    public int SkillID { get; set; }
+    
+    [Required(ErrorMessage = "Please enter years of experience.")]
+    [Range(0, 50, ErrorMessage = "Years of experience must be between 0 and 50.")]
+    public int YearsOfExperience { get; set; }
+}
+📌 Step 2: Create Razor Views
+1️⃣ Candidate Review Listing Page
+📂 Views/CandidateReview/Index.cshtml
+
+html
+Copy
+Edit
+@model List<CandidateReviewViewModel>
+
+@{
+    ViewData["Title"] = "Candidate Reviews";
+}
+
+<h2 class="mb-4">Candidate Reviews</h2>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th>Candidate Name</th>
+            <th>Position</th>
+            <th>Status</th>
+            <th>Review Date</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var review in Model)
+        {
+            <tr>
+                <td>@review.CandidateID</td>
+                <td>@review.PositionID</td>
+                <td>
+                    <span class="badge @(review.Status == "Shortlisted" ? "bg-success" : "bg-warning")">
+                        @review.Status
+                    </span>
+                </td>
+                <td>@review.ReviewDate?.ToString("yyyy-MM-dd")</td>
+                <td>
+                    <a asp-action="ReviewCandidate" asp-route-candidateId="@review.CandidateID" 
+                       asp-route-positionId="@review.PositionID" class="btn btn-primary btn-sm">
+                        Review
+                    </a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+2️⃣ Candidate Review Form (Detailed Review Page)
+📂 Views/CandidateReview/ReviewCandidate.cshtml
+
+html
+Copy
+Edit
+@model CandidateReviewViewModel
+
+@{
+    ViewData["Title"] = "Review Candidate";
+}
+
+<h2>Review Candidate</h2>
+
+<form asp-action="SubmitReview" method="post">
+    <input type="hidden" asp-for="CandidateID" />
+    <input type="hidden" asp-for="PositionID" />
+    <input type="hidden" asp-for="ReviewerID" />
+
+    <div class="mb-3">
+        <label class="form-label">Comments</label>
+        <textarea asp-for="Comments" class="form-control"></textarea>
+        <span asp-validation-for="Comments" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Status</label>
+        <select asp-for="Status" class="form-control">
+            <option value="">-- Select Status --</option>
+            <option value="Shortlisted">Shortlisted</option>
+            <option value="Rejected">Rejected</option>
+        </select>
+        <span asp-validation-for="Status" class="text-danger"></span>
+    </div>
+
+    <h4>Candidate Skills</h4>
+    <div id="skillsContainer">
+        @for (int i = 0; i < Model.CandidateSkills.Count; i++)
+        {
+            <div class="mb-2">
+                <label class="form-label">Skill</label>
+                <select asp-for="CandidateSkills[i].SkillID" class="form-control">
+                    <option value="">-- Select Skill --</option>
+                    <option value="1">C#</option>
+                    <option value="2">Java</option>
+                    <option value="3">SQL</option>
+                </select>
+
+                <label class="form-label">Years of Experience</label>
+                <input asp-for="CandidateSkills[i].YearsOfExperience" class="form-control" type="number" />
+                <span asp-validation-for="CandidateSkills[i].YearsOfExperience" class="text-danger"></span>
+            </div>
+        }
+    </div>
+
+    <button type="submit" class="btn btn-success">Submit Review</button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+📌 Step 3: Modify Controller for Razor Views
+📂 Controllers/CandidateReviewController.cs
+
+csharp
+Copy
+Edit
+public class CandidateReviewController : Controller
+{
+    private readonly ICandidateReviewService _reviewService;
+
+    public CandidateReviewController(ICandidateReviewService reviewService)
+    {
+        _reviewService = reviewService;
+    }
+
+    public async Task<IActionResult> Index()
+    {
+        var reviews = await _reviewService.GetCandidateScreeningHistory(1); // Example CandidateID
+        return View(reviews);
+    }
+
+    public async Task<IActionResult> ReviewCandidate(int candidateId, int positionId)
+    {
+        var candidates = await _reviewService.GetCandidatesForReview(positionId);
+        var candidate = candidates.FirstOrDefault(c => c.CandidateID == candidateId);
+        if (candidate == null)
+        {
+            return NotFound();
+        }
+
+        var viewModel = new CandidateReviewViewModel
+        {
+            CandidateID = candidate.CandidateID,
+            PositionID = positionId,
+            ReviewerID = 1, // Example Reviewer
+            Comments = "",
+            Status = "",
+            CandidateSkills = new List<CandidateSkillViewModel>
+            {
+                new CandidateSkillViewModel { SkillID = 1, YearsOfExperience = 0 },
+                new CandidateSkillViewModel { SkillID = 2, YearsOfExperience = 0 }
+            }
+        };
+
+        return View(viewModel);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SubmitReview(CandidateReviewViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View("ReviewCandidate", model);
+        }
+
+        bool success = await _reviewService.SubmitReview(
+            model.CandidateID, 
+            model.PositionID, 
+            model.ReviewerID, 
+            model.Comments, 
+            model.Status, 
+            model.CandidateSkills.Select(s => new CandidateSkill 
+            { 
+                SkillID = s.SkillID, 
+                YearsOfExperience = s.YearsOfExperience 
+            }).ToList()
+        );
+
+        if (!success)
+        {
+            ModelState.AddModelError("", "Failed to submit review.");
+            return View("ReviewCandidate", model);
+        }
+
+        return RedirectToAction("Index");
+    }
+}
+
+---------------------
+
+📌 Step 1: Update Review Submission Logic
+📂 Services/CandidateReviewService.cs
+
+csharp
+Copy
+Edit
+public async Task<bool> SubmitReview(
+    int candidateId, 
+    int positionId, 
+    int reviewerId, 
+    string comments, 
+    string status, 
+    List<CandidateSkill> candidateSkills)
+{
+    var review = new CandidateReview
+    {
+        CandidateID = candidateId,
+        PositionID = positionId,
+        ReviewerID = reviewerId,
+        Comments = comments,
+        Status = status,
+        ReviewDate = DateTime.Now
+    };
+
+    _context.CandidateReviews.Add(review);
+    await _context.SaveChangesAsync();
+
+    if (status == "Shortlisted")
+    {
+        await MoveCandidateToInterviewStage(candidateId, positionId);
+    }
+
+    return true;
+}
+
+private async Task MoveCandidateToInterviewStage(int candidateId, int positionId)
+{
+    var interview = new Interview
+    {
+        CandidateID = candidateId,
+        PositionID = positionId,
+        InterviewDate = DateTime.Now.AddDays(2),
+        AssignedInterviewerID = 1 // Assign default interviewer
+    };
+
+    _context.Interviews.Add(interview);
+    await _context.SaveChangesAsync();
+}
+📌 Step 2: Show Notifications for Previously Screened Candidates
+📂 Views/CandidateReview/ReviewCandidate.cshtml
+
+Modify ReviewCandidate.cshtml to check screening history:
+
+html
+Copy
+Edit
+@if (ViewBag.PreviousScreeningDate != null)
+{
+    <div class="alert alert-warning">
+        This candidate was previously screened on @ViewBag.PreviousScreeningDate.
+    </div>
+}
+📂 CandidateReviewController.cs Modify the ReviewCandidate() action:
+
+csharp
+Copy
+Edit
+public async Task<IActionResult> ReviewCandidate(int candidateId, int positionId)
+{
+    var lastReview = await _context.CandidateReviews
+        .Where(r => r.CandidateID == candidateId)
+        .OrderByDescending(r => r.ReviewDate)
+        .FirstOrDefaultAsync();
+
+    if (lastReview != null)
+    {
+        ViewBag.PreviousScreeningDate = lastReview.ReviewDate.ToString("yyyy-MM-dd");
+    }
+
+    return View(new CandidateReviewViewModel { CandidateID = candidateId, PositionID = positionId });
+}
+📌 Step 3: Automatically Assign Interviewers to Shortlisted Candidates
+📂 Services/InterviewService.cs
+
+csharp
+Copy
+Edit
+public async Task<bool> AssignInterviewers(int candidateId, int positionId)
+{
+    var interview = await _context.Interviews
+        .FirstOrDefaultAsync(i => i.CandidateID == candidateId && i.PositionID == positionId);
+
+    if (interview == null) return false;
+
+    var interviewers = _context.Users.Where(u => u.Role == "Interviewer").Take(2).ToList();
+
+    foreach (var interviewer in interviewers)
+    {
+        _context.InterviewAssignments.Add(new InterviewAssignment
+        {
+            InterviewID = interview.InterviewID,
+            InterviewerID = interviewer.UserID
+        });
+    }
+
+    await _context.SaveChangesAsync();
+    return true;
+}
+🔥 Final Outcome
+
+-------------------------

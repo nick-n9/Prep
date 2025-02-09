@@ -1,3 +1,19 @@
+[HttpGet]
+public IActionResult ApplyWithData(int positionId)
+{
+    ViewBag.PositionId = positionId;
+    
+    // Retrieve candidate data safely from TempData
+    var extractedCandidateJson = TempData["ExtractedCandidate"] as string;
+    var candidate = !string.IsNullOrEmpty(extractedCandidateJson) 
+        ? JsonConvert.DeserializeObject<Candidate>(extractedCandidateJson) 
+        : new Candidate { FullName = "", Email = "", PhoneNumber = "" }; // Default values
+    
+    return View("Apply", candidate);
+}
+
+
+
 Step 1: Install Dependencies
 Add the following NuGet packages to your .NET Core 8 project:
 

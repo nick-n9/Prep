@@ -1,0 +1,92 @@
+1️⃣ Improve Regex Extraction
+The previous regex patterns were basic. Let's refine them for better accuracy:
+
+csharp
+Copy
+Edit
+private string ExtractDetail(string text, string pattern)
+{
+    var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase | RegexOptions.Multiline);
+    return match.Success ? match.Groups[1].Value.Trim() : "";
+}
+New Regex Patterns
+Field	Improved Regex
+Full Name	`(?i)(?:Name
+Email	[\w\.-]+@[\w\.-]+\.\w+
+Phone	(\+?\d{1,3}[\s-]?)?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{3,4}
+Updated Extraction Code:
+
+csharp
+Copy
+Edit
+candidate.FullName = ExtractDetail(extractedText, @"(?i)(?:Name|Full Name)[:\s]+([\p{L}\s\.\-]+)");
+candidate.Email = ExtractDetail(extractedText, @"[\w\.-]+@[\w\.-]+\.\w+");
+candidate.PhoneNumber = ExtractDetail(extractedText, @"(\+?\d{1,3}[\s-]?)?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{3,4}");
+2️⃣ Add Error Handling for Unsupported Files
+If a user uploads a non-supported file type, we display an error message.
+
+Modify ExtractTextFromCV
+csharp
+Copy
+Edit
+private async Task<string> ExtractTextFromCV(IFormFile file)
+{
+    string text = "";
+    var extension = Path.GetExtension(file.FileName).ToLower();
+
+    try
+    {
+        using (var stream = file.OpenReadStream())
+        {
+            if (extension == ".pdf")
+                text = ExtractTextFromPdf(stream);
+            else if (extension == ".doc" || extension == ".docx")
+                text = ExtractTextFromWord(stream);
+            else if (extension == ".txt")
+                text = await new StreamReader(stream).ReadToEndAsync();
+            else
+                throw new NotSupportedException("Unsupported file format. Please upload a PDF, DOC, or TXT file.");
+        }
+    }
+    catch (Exception ex)
+    {
+        TempData["ErrorMessage"] = "Error processing CV: " + ex.Message;
+        return "";
+    }
+
+    return text;
+}
+3️⃣ Store Extracted Text for Recruiter Review
+We save the extracted CV text in the Candidate table for recruiters to verify later.
+
+Modify Candidate Model
+Add a new field to store raw extracted text:
+
+csharp
+Copy
+Edit
+public string ExtractedText { get; set; }
+Update Apply Action
+csharp
+Copy
+Edit
+candidate.ExtractedText = extractedText;
+4️⃣ Show Errors & Extracted Text in Apply.cshtml
+We display error messages and show extracted text for recruiter review.
+
+Modify Apply.cshtml
+html
+Copy
+Edit
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+}
+
+@if (!string.IsNullOrEmpty(Model.ExtractedText))
+{
+    <div class="alert alert-info">
+        <strong>Extracted CV Data:</strong>
+        <pre>@Model.ExtractedText</pre>
+    </div>
+}

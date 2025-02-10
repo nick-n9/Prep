@@ -1,0 +1,191 @@
+1️⃣ Configure Email Settings in appsettings.json
+Before implementing the email functionality, we need to add SMTP settings in appsettings.json:
+
+📄 appsettings.json
+
+json
+Copy
+Edit
+"EmailSettings": {
+  "SmtpServer": "smtp.gmail.com",
+  "SmtpPort": 587,
+  "SenderEmail": "your-email@gmail.com",
+  "SenderPassword": "your-email-password",
+  "EnableSsl": true
+}
+🔹 Replace "your-email@gmail.com" and "your-email-password" with actual SMTP credentials (use environment variables in production).
+
+2️⃣ Create an Interface for the Email Service
+We follow the best practice of using an interface to make our email service reusable.
+
+📄 Services/IEmailService.cs
+
+csharp
+Copy
+Edit
+using System.Threading.Tasks;
+
+public interface IEmailService
+{
+    Task SendEmailAsync(string toEmail, string subject, string body);
+}
+3️⃣ Implement the Email Service
+📄 Services/EmailService.cs
+
+csharp
+Copy
+Edit
+using System.Net;
+using System.Net.Mail;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+
+public class EmailService : IEmailService
+{
+    private readonly IConfiguration _configuration;
+
+    public EmailService(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+
+    public async Task SendEmailAsync(string toEmail, string subject, string body)
+    {
+        var smtpServer = _configuration["EmailSettings:SmtpServer"];
+        var smtpPort = int.Parse(_configuration["EmailSettings:SmtpPort"]);
+        var senderEmail = _configuration["EmailSettings:SenderEmail"];
+        var senderPassword = _configuration["EmailSettings:SenderPassword"];
+        var enableSsl = bool.Parse(_configuration["EmailSettings:EnableSsl"]);
+
+        var smtpClient = new SmtpClient(smtpServer)
+        {
+            Port = smtpPort,
+            Credentials = new NetworkCredential(senderEmail, senderPassword),
+            EnableSsl = enableSsl
+        };
+
+        var mailMessage = new MailMessage
+        {
+            From = new MailAddress(senderEmail),
+            Subject = subject,
+            Body = body,
+            IsBodyHtml = false
+        };
+
+        mailMessage.To.Add(toEmail);
+
+        await smtpClient.SendMailAsync(mailMessage);
+    }
+}
+🔹 This implementation uses System.Net.Mail to send emails.
+🔹 It reads SMTP settings from appsettings.json dynamically.
+
+4️⃣ Register the Email Service in Program.cs
+To make the email service available in the dependency injection container, register it inside Program.cs:
+
+📄 Program.cs
+
+csharp
+Copy
+Edit
+builder.Services.AddScoped<IEmailService, EmailService>();
+5️⃣ Update SendMeetingInvites in Interview Service
+Now we modify SendMeetingInvites to actually send emails via EmailService:
+
+📄 Services/InterviewService.cs
+
+csharp
+Copy
+Edit
+public class InterviewService : IInterviewService
+{
+    private readonly ApplicationDbContext _context;
+    private readonly IEmailService _emailService;
+
+    public InterviewService(ApplicationDbContext context, IEmailService emailService)
+    {
+        _context = context;
+        _emailService = emailService;
+    }
+
+    public async Task SendMeetingInvites(int candidateId, List<int> interviewerIds, DateTime interviewDate)
+    {
+        var candidate = await _context.Candidates.FindAsync(candidateId);
+        var interviewers = await _context.Users
+            .Where(u => interviewerIds.Contains(u.Id))
+            .ToListAsync();
+
+        if (candidate == null || !interviewers.Any())
+        {
+            throw new Exception("Invalid candidate or interviewers.");
+        }
+
+        string subject = "Interview Scheduled - " + interviewDate.ToString("yyyy-MM-dd HH:mm");
+        string body = $"Dear {candidate.FullName},\n\nYou have an interview scheduled on {interviewDate}. \nPlease be prepared.\n\nBest regards,\nHR Team";
+
+        // Send email to candidate
+        await _emailService.SendEmailAsync(candidate.Email, subject, body);
+
+        // Send email to interviewers
+        foreach (var interviewer in interviewers)
+        {
+            string interviewerBody = $"Dear {interviewer.FullName},\n\nYou are assigned to interview {candidate.FullName} on {interviewDate}.\n\nBest regards,\nHR Team";
+            await _emailService.SendEmailAsync(interviewer.Email, subject, interviewerBody);
+        }
+    }
+}
+🔹 Verifies if candidate and interviewers exist
+🔹 Sends emails to both candidate and interviewers
+🔹 Uses dependency injection to call EmailService
+
+6️⃣ Call SendMeetingInvites from the Controller
+Inside the InterviewController, call SendMeetingInvites when an interview is scheduled.
+
+📄 Controllers/InterviewController.cs
+
+csharp
+Copy
+Edit
+[HttpPost]
+public async Task<IActionResult> ScheduleInterview(ScheduleInterviewViewModel model)
+{
+    if (!ModelState.IsValid)
+    {
+        return View(model);
+    }
+
+    var interview = new Interview
+    {
+        CandidateId = model.CandidateId,
+        PositionId = model.PositionId,
+        InterviewType = model.InterviewType,
+        InterviewDate = model.InterviewDate,
+        Status = "Scheduled",
+        CreatedAt = DateTime.UtcNow
+    };
+
+    _context.Interviews.Add(interview);
+    await _context.SaveChangesAsync();
+
+    // Send meeting invites
+    await _interviewService.SendMeetingInvites(model.CandidateId, model.InterviewerIds, model.InterviewDate);
+
+    TempData["SuccessMessage"] = "Interview scheduled successfully. Emails sent!";
+    return RedirectToAction("ManageInterviews");
+}
+🔹 Saves the new interview to the database
+🔹 Calls SendMeetingInvites to send emails
+🔹 Uses TempData for success message
+
+7️⃣ Show Success Message in Views
+Modify ManageInterviews.cshtml to show a success message after scheduling an interview.
+
+📄 Views/Interview/ManageInterviews.cshtml
+
+razor
+Copy
+Edit
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+}

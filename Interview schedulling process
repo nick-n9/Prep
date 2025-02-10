@@ -343,4 +343,160 @@ Edit
 Notifies candidates when an interview is scheduled, rescheduled, or canceled.
 Displays notifications in the UI.
 
+
+
+📌 Step-by-Step Guide to Adding Notifications for Interview Scheduling
+We are adding notifications for interview actions (e.g., scheduled, rescheduled, or canceled).
+This requires modifications in the Controller, Service, View Layout, and Database.
+
+1️⃣ Modify Interview Controller
+📂 Controllers/InterviewController.cs
+
+✔ Add Notification When Scheduling an Interview
+Locate the ScheduleInterview method and add this line after saving the interview.
+
+csharp
+Copy
+Edit
+await _notificationService.SendInterviewNotification(candidateId, 
+    $"You have an interview scheduled on {interviewDate:dddd, MMM dd, yyyy hh:mm tt}");
+✔ Add Notification When Rescheduling an Interview
+Modify RescheduleInterview method:
+
+csharp
+Copy
+Edit
+await _notificationService.SendInterviewNotification(interview.CandidateID, 
+    $"Your interview has been rescheduled to {newDate:dddd, MMM dd, yyyy hh:mm tt}.");
+✔ Add Notification When Canceling an Interview
+Modify CancelInterview method:
+
+csharp
+Copy
+Edit
+await _notificationService.SendInterviewNotification(interview.CandidateID, 
+    "Your interview has been canceled.");
+2️⃣ Implement Notification Service
+📂 Services/NotificationService.cs
+
+csharp
+Copy
+Edit
+public class NotificationService : INotificationService
+{
+    private readonly ApplicationDbContext _context;
+
+    public NotificationService(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task SendInterviewNotification(int candidateId, string message)
+    {
+        var notification = new Notification
+        {
+            UserID = candidateId,
+            Message = message,
+            CreatedDate = DateTime.Now
+        };
+
+        _context.Notifications.Add(notification);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<List<Notification>> GetUserNotifications(int userId)
+    {
+        return await _context.Notifications
+            .Where(n => n.UserID == userId)
+            .OrderByDescending(n => n.CreatedDate)
+            .ToListAsync();
+    }
+}
+📂 Services/Interfaces/INotificationService.cs
+
+csharp
+Copy
+Edit
+public interface INotificationService
+{
+    Task SendInterviewNotification(int candidateId, string message);
+    Task<List<Notification>> GetUserNotifications(int userId);
+}
+3️⃣ Modify Layout to Display Notifications
+📂 Views/Shared/_Layout.cshtml (Inside <body>)
+
+✔ Fetch Notifications from ViewBag
+Add the following inside the <body> tag, preferably below the navbar.
+
+html
+Copy
+Edit
+<div id="notifications">
+    @if (ViewBag.Notifications != null)
+    {
+        @foreach (var notification in ViewBag.Notifications)
+        {
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                @notification.Message
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+    }
+</div>
+✔ Style the Notification Messages
+📂 wwwroot/css/site.css
+
+css
+Copy
+Edit
+#notifications {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    z-index: 1050;
+    width: 350px;
+}
+4️⃣ Fetch Notifications in _Layout.cshtml
+📂 Controllers/BaseController.cs (Create if not exists)
+
+csharp
+Copy
+Edit
+public class BaseController : Controller
+{
+    private readonly INotificationService _notificationService;
+    
+    public BaseController(INotificationService notificationService)
+    {
+        _notificationService = notificationService;
+    }
+
+    public override void OnActionExecuting(ActionExecutingContext context)
+    {
+        int userId = GetLoggedInUserId(); // Implement this method to get the logged-in user ID.
+        ViewBag.Notifications = _notificationService.GetUserNotifications(userId).Result;
+        base.OnActionExecuting(context);
+    }
+}
+📂 Modify Controllers/InterviewController.cs
+
+csharp
+Copy
+Edit
+public class InterviewController : BaseController
+{
+    private readonly IInterviewService _interviewService;
+
+    public InterviewController(INotificationService notificationService, IInterviewService interviewService)
+        : base(notificationService)
+    {
+        _interviewService = interviewService;
+    }
+}
+✅ Final Outcome
+🚀 Automatic Notifications for Interviews
+📅 Scheduled, Rescheduled & Canceled Interviews Trigger Alerts
+📌 Live Alerts on Every Page for Logged-In Users
+🎨 Styled for a Great User Experience
+
   
